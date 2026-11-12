@@ -1,0 +1,57 @@
+# Extra services added on top of the Airflow containers that Astro CLI creates.
+# Astro automatically merges this file when you run `astro dev start`.
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: currency-mongo
+    restart: unless-stopped
+    labels:
+      project: "currency-etl-airflow"
+      component: "database"
+      description: "MongoDB storing daily currency exchange rates"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: currency_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db              # persistent storage (data)
+      - mongo_config:/data/configdb      # persistent storage (config)
+    networks:
+      - airflow                          # same network as the Airflow containers
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: currency-mongo-express
+    restart: unless-stopped
+    labels:
+      project: "currency-etl-airflow"
+      component: "database-ui"
+      description: "Mongo Express web UI for MongoDB"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongo:27017/?authSource=admin
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    networks:
+      - airflow
+
+# Named volumes: data survives `astro dev stop` / `astro dev restart`
+volumes:
+  mongo_data:
+    driver: local
+  mongo_config:
+    driver: local
